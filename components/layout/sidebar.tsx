@@ -11,6 +11,7 @@ import {
   Stethoscope,
   Users,
   GitMerge,
+  ClipboardList,
   Settings,
   LogOut,
   Menu,
@@ -22,6 +23,7 @@ import { useState } from 'react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Assignment Board', href: '/assignment-board', icon: ClipboardList },
   { name: 'Health Systems', href: '/health-systems', icon: Building2 },
   { name: 'Hospitals', href: '/hospitals', icon: Building },
   { name: 'Departments', href: '/departments', icon: Layers },
