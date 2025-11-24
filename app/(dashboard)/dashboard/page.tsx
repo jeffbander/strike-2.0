@@ -3,6 +3,23 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Building,
+  Layers,
+  Stethoscope,
+  Users,
+  FileSpreadsheet,
+  GitMerge,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  Download,
+  Plus,
+} from 'lucide-react';
 
 interface DashboardStats {
   totalHospitals: number;
@@ -81,7 +98,6 @@ export default function DashboardPage() {
 
       setJobPositions(jobs);
 
-      // Calculate stats
       const openPositions = jobs.filter((j) => j.status === 'Open').length;
       const assignedPositions = jobs.filter((j) => j.status === 'Assigned').length;
       const confirmedPositions = jobs.filter((j) => j.status === 'Confirmed').length;
@@ -97,7 +113,6 @@ export default function DashboardPage() {
         confirmedPositions,
       });
 
-      // Calculate capacity by hospital
       const capacityMap: Record<string, HospitalCapacity> = {};
       jobs.forEach((job) => {
         const code = job.shifts?.services?.hospitals?.short_code || 'Unknown';
@@ -130,7 +145,6 @@ export default function DashboardPage() {
     setExporting(true);
 
     try {
-      // Build CSV content
       const headers = [
         'Job Code',
         'Hospital',
@@ -168,7 +182,6 @@ export default function DashboardPage() {
         ),
       ].join('\n');
 
-      // Download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -191,222 +204,282 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted mt-1">
             Strike Prep Capacity Management Overview
           </p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex gap-3">
           <Button variant="outline" onClick={exportToExcel} disabled={exporting}>
-            {exporting ? 'Exporting...' : 'Export Coverage Plan'}
+            <Download className="h-4 w-4 mr-2" />
+            {exporting ? 'Exporting...' : 'Export Plan'}
           </Button>
-          <Link href="/matching">
-            <Button>Start Matching</Button>
-          </Link>
+          <Button asChild>
+            <Link href="/matching">
+              <GitMerge className="h-4 w-4 mr-2" />
+              Start Matching
+            </Link>
+          </Button>
         </div>
       </div>
 
       {/* Stats Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-3"></div>
-              <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            </div>
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="h-4 bg-border rounded w-1/2 mb-3" />
+                <div className="h-8 bg-border rounded w-1/3" />
+              </CardContent>
+            </Card>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title="Hospitals"
             value={stats?.totalHospitals || 0}
-            icon="🏥"
+            icon={Building}
             href="/hospitals"
+            trend={stats?.totalHospitals ? '+1 this week' : undefined}
           />
           <StatCard
             title="Departments"
             value={stats?.totalDepartments || 0}
-            icon="🏢"
+            icon={Layers}
             href="/departments"
           />
           <StatCard
             title="Services"
             value={stats?.totalServices || 0}
-            icon="⚕️"
+            icon={Stethoscope}
             href="/services"
           />
           <StatCard
             title="Providers"
             value={stats?.totalProviders || 0}
-            icon="👩‍⚕️"
+            icon={Users}
             href="/providers"
+            trend={stats?.totalProviders ? 'Available for assignment' : undefined}
           />
         </div>
       )}
 
-      {/* Capacity Summary */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Capacity Summary</h2>
-          <span className="text-2xl font-bold text-indigo-600">{assignmentRate}% Coverage</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-3xl font-bold text-gray-900">
-              {stats?.totalJobPositions || 0}
+      {/* Coverage Summary Card */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Coverage Summary</CardTitle>
+              <CardDescription>Position assignment progress</CardDescription>
             </div>
-            <div className="text-sm text-gray-600 mt-1">Total Positions</div>
-          </div>
-          <div className="text-center p-4 bg-red-50 rounded-lg">
-            <div className="text-3xl font-bold text-red-600">
-              {stats?.openPositions || 0}
+            <div className="text-right">
+              <span className="text-3xl font-bold text-primary">{assignmentRate}%</span>
+              <p className="text-sm text-muted">Coverage Rate</p>
             </div>
-            <div className="text-sm text-gray-600 mt-1">Open</div>
           </div>
-          <div className="text-center p-4 bg-yellow-50 rounded-lg">
-            <div className="text-3xl font-bold text-yellow-600">
-              {stats?.assignedPositions || 0}
-            </div>
-            <div className="text-sm text-gray-600 mt-1">Assigned</div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <StatusBlock
+              icon={FileSpreadsheet}
+              value={stats?.totalJobPositions || 0}
+              label="Total Positions"
+              variant="default"
+            />
+            <StatusBlock
+              icon={AlertCircle}
+              value={stats?.openPositions || 0}
+              label="Open"
+              variant="danger"
+            />
+            <StatusBlock
+              icon={Clock}
+              value={stats?.assignedPositions || 0}
+              label="Assigned"
+              variant="warning"
+            />
+            <StatusBlock
+              icon={CheckCircle2}
+              value={stats?.confirmedPositions || 0}
+              label="Confirmed"
+              variant="success"
+            />
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <div className="text-3xl font-bold text-green-600">
-              {stats?.confirmedPositions || 0}
-            </div>
-            <div className="text-sm text-gray-600 mt-1">Confirmed</div>
-          </div>
-        </div>
 
-        {/* Progress Bar */}
-        <div className="mt-6">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-gray-600">Assignment Progress</span>
-            <span className="font-medium text-gray-900">{assignmentRate}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-            <div className="h-full flex">
-              <div
-                className="bg-green-500 transition-all duration-500"
-                style={{ width: `${stats?.totalJobPositions ? (stats.confirmedPositions / stats.totalJobPositions) * 100 : 0}%` }}
-              />
-              <div
-                className="bg-yellow-500 transition-all duration-500"
-                style={{ width: `${stats?.totalJobPositions ? (stats.assignedPositions / stats.totalJobPositions) * 100 : 0}%` }}
-              />
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Assignment Progress</span>
+              <span className="font-medium text-foreground">{assignmentRate}%</span>
+            </div>
+            <div className="w-full bg-border rounded-full h-3 overflow-hidden">
+              <div className="h-full flex">
+                <div
+                  className="bg-success transition-all duration-500"
+                  style={{
+                    width: `${stats?.totalJobPositions ? (stats.confirmedPositions / stats.totalJobPositions) * 100 : 0}%`,
+                  }}
+                />
+                <div
+                  className="bg-warning transition-all duration-500"
+                  style={{
+                    width: `${stats?.totalJobPositions ? (stats.assignedPositions / stats.totalJobPositions) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-4 text-xs text-muted">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 bg-success rounded-full" />
+                Confirmed
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 bg-warning rounded-full" />
+                Assigned
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 bg-border rounded-full" />
+                Open
+              </span>
             </div>
           </div>
-          <div className="flex justify-end space-x-4 mt-2 text-xs">
-            <span className="flex items-center">
-              <span className="w-3 h-3 bg-green-500 rounded mr-1"></span>
-              Confirmed
-            </span>
-            <span className="flex items-center">
-              <span className="w-3 h-3 bg-yellow-500 rounded mr-1"></span>
-              Assigned
-            </span>
-            <span className="flex items-center">
-              <span className="w-3 h-3 bg-gray-200 rounded mr-1"></span>
-              Open
-            </span>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Hospital Capacity Breakdown */}
       {hospitalCapacity.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Capacity by Hospital</h2>
-          <div className="space-y-4">
-            {hospitalCapacity.map((hospital) => {
-              const coverage = hospital.total_positions > 0
-                ? Math.round((hospital.assigned / hospital.total_positions) * 100)
-                : 0;
-              return (
-                <div key={hospital.hospital_code} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <span className="font-medium text-gray-900">{hospital.hospital_name}</span>
-                      <span className="text-gray-500 ml-2">({hospital.hospital_code})</span>
+        <Card>
+          <CardHeader>
+            <CardTitle>Capacity by Hospital</CardTitle>
+            <CardDescription>Coverage status across facilities</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {hospitalCapacity.map((hospital) => {
+                const coverage =
+                  hospital.total_positions > 0
+                    ? Math.round((hospital.assigned / hospital.total_positions) * 100)
+                    : 0;
+                return (
+                  <div
+                    key={hospital.hospital_code}
+                    className="flex items-center gap-4 p-3 rounded-lg bg-background border border-border"
+                  >
+                    <div className="h-10 w-10 rounded-lg bg-primary-light flex items-center justify-center flex-shrink-0">
+                      <Building className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="text-right">
-                      <span className={`font-bold ${coverage >= 80 ? 'text-green-600' : coverage >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                        {coverage}%
-                      </span>
-                      <span className="text-gray-500 text-sm ml-2">
-                        ({hospital.assigned}/{hospital.total_positions})
-                      </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground truncate">
+                            {hospital.hospital_name}
+                          </span>
+                          <Badge variant="secondary">{hospital.hospital_code}</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              coverage >= 80 ? 'success' : coverage >= 50 ? 'warning' : 'danger'
+                            }
+                          >
+                            {coverage}%
+                          </Badge>
+                          <span className="text-sm text-muted">
+                            {hospital.assigned}/{hospital.total_positions}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-border rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${
+                            coverage >= 80
+                              ? 'bg-success'
+                              : coverage >= 50
+                                ? 'bg-warning'
+                                : 'bg-danger'
+                          }`}
+                          style={{ width: `${coverage}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-500 ${
-                        coverage >= 80 ? 'bg-green-500' : coverage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${coverage}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Link href="/hospitals">
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+          <CardDescription>Common tasks to manage your coverage plan</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <ActionCard
+              href="/hospitals"
+              icon={Building}
               title="Add Hospital"
               description="Create a new hospital"
-              icon="🏥"
             />
-          </Link>
-          <Link href="/services/new">
             <ActionCard
+              href="/services/new"
+              icon={Stethoscope}
               title="Create Service"
               description="Set up staffing needs"
-              icon="⚕️"
             />
-          </Link>
-          <Link href="/providers">
             <ActionCard
+              href="/providers"
+              icon={Users}
               title="Add Providers"
               description="Manage provider roster"
-              icon="👩‍⚕️"
             />
-          </Link>
-          <Link href="/matching">
             <ActionCard
+              href="/matching"
+              icon={GitMerge}
               title="Match Providers"
               description="Fill open positions"
-              icon="🔄"
             />
-          </Link>
-        </div>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Setup Guide for new users */}
+      {/* Getting Started Guide */}
       {stats?.totalJobPositions === 0 && (
-        <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-6">
-          <h2 className="text-lg font-semibold text-indigo-900 mb-2">Getting Started</h2>
-          <p className="text-indigo-700 mb-4">
-            Follow these steps to set up your strike coverage plan:
-          </p>
-          <ol className="list-decimal list-inside space-y-2 text-indigo-800">
-            <li>Create hospitals in your health system</li>
-            <li>Configure departments and units for each hospital</li>
-            <li>Create services with staffing requirements</li>
-            <li>Add providers with their skills and hospital access</li>
-            <li>Use the matching interface to assign providers to jobs</li>
-            <li>Export your coverage plan</li>
-          </ol>
-        </div>
+        <Card className="border-primary/50 bg-primary-light/30">
+          <CardHeader>
+            <CardTitle className="text-primary">Getting Started</CardTitle>
+            <CardDescription>
+              Follow these steps to set up your strike coverage plan
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ol className="space-y-3">
+              {[
+                'Create hospitals in your health system',
+                'Configure departments and units for each hospital',
+                'Create services with staffing requirements',
+                'Add providers with their skills and hospital access',
+                'Use the matching interface to assign providers to jobs',
+                'Export your coverage plan',
+              ].map((step, index) => (
+                <li key={index} className="flex items-center gap-3">
+                  <span className="h-6 w-6 rounded-full bg-primary text-white text-sm font-medium flex items-center justify-center flex-shrink-0">
+                    {index + 1}
+                  </span>
+                  <span className="text-foreground">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
@@ -415,47 +488,109 @@ export default function DashboardPage() {
 function StatCard({
   title,
   value,
-  icon,
+  icon: Icon,
   href,
+  trend,
 }: {
   title: string;
   value: number;
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
   href: string;
+  trend?: string;
 }) {
   return (
     <Link href={href}>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-600">{title}</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
+      <Card className="hover:border-primary/50 hover:shadow-md transition-all cursor-pointer h-full">
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted">{title}</p>
+              <p className="text-3xl font-bold text-foreground mt-1">{value}</p>
+              {trend && (
+                <p className="text-xs text-muted mt-2 flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3 text-success" />
+                  {trend}
+                </p>
+              )}
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-primary-light flex items-center justify-center">
+              <Icon className="h-5 w-5 text-primary" />
+            </div>
           </div>
-          <div className="text-3xl">{icon}</div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </Link>
   );
 }
 
+function StatusBlock({
+  icon: Icon,
+  value,
+  label,
+  variant,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: number;
+  label: string;
+  variant: 'default' | 'success' | 'warning' | 'danger';
+}) {
+  const bgColors = {
+    default: 'bg-background',
+    success: 'bg-success-light',
+    warning: 'bg-warning-light',
+    danger: 'bg-danger-light',
+  };
+
+  const textColors = {
+    default: 'text-foreground',
+    success: 'text-success',
+    warning: 'text-warning',
+    danger: 'text-danger',
+  };
+
+  const iconColors = {
+    default: 'text-muted',
+    success: 'text-success',
+    warning: 'text-warning',
+    danger: 'text-danger',
+  };
+
+  return (
+    <div className={`p-4 rounded-lg ${bgColors[variant]} text-center`}>
+      <Icon className={`h-5 w-5 mx-auto mb-2 ${iconColors[variant]}`} />
+      <div className={`text-2xl font-bold ${textColors[variant]}`}>{value}</div>
+      <div className="text-sm text-muted">{label}</div>
+    </div>
+  );
+}
+
 function ActionCard({
+  href,
+  icon: Icon,
   title,
   description,
-  icon,
 }: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
-  icon: string;
 }) {
   return (
-    <div className="p-4 border border-gray-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50 transition-all cursor-pointer">
-      <div className="flex items-start space-x-3">
-        <div className="text-2xl">{icon}</div>
-        <div>
-          <h3 className="font-medium text-gray-900">{title}</h3>
-          <p className="text-sm text-gray-600">{description}</p>
+    <Link href={href}>
+      <div className="p-4 rounded-lg border border-border bg-card hover:border-primary/50 hover:bg-primary-light/30 transition-all cursor-pointer group">
+        <div className="flex items-start gap-3">
+          <div className="h-9 w-9 rounded-lg bg-primary-light flex items-center justify-center group-hover:bg-primary transition-colors">
+            <Icon className="h-4 w-4 text-primary group-hover:text-white transition-colors" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
+              {title}
+            </h3>
+            <p className="text-sm text-muted">{description}</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
