@@ -34,12 +34,12 @@ export default async function Home() {
               <span className="text-xl font-bold text-foreground">Strike Prep</span>
             </Link>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" asChild>
-                <Link href="/sign-in">Sign In</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/sign-up">Get Started</Link>
-              </Button>
+              <Link href="/sign-in">
+                <Button variant="ghost">Sign In</Button>
+              </Link>
+              <Link href="/sign-up">
+                <Button>Get Started</Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -63,15 +63,15 @@ export default async function Home() {
               health system.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Button size="lg" asChild>
-                <Link href="/sign-up">
+              <Link href="/sign-up">
+                <Button size="lg">
                   Start Planning
-                  <ArrowRight className="h-5 w-5 ml-2" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="/sign-in">Sign In to Dashboard</Link>
-              </Button>
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              </Link>
+              <Link href="/sign-in">
+                <Button size="lg" variant="outline">Sign In to Dashboard</Button>
+              </Link>
             </div>
           </div>
 
@@ -210,12 +210,12 @@ export default async function Home() {
             continuity during labor actions.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <Button size="lg" asChild>
-              <Link href="/sign-up">
+            <Link href="/sign-up">
+              <Button size="lg">
                 Create Free Account
-                <ArrowRight className="h-5 w-5 ml-2" />
-              </Link>
-            </Button>
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
           </div>
           <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-muted">
             <div className="flex items-center gap-2">

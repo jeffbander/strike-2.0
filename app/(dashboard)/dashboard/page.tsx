@@ -217,12 +217,12 @@ export default function DashboardPage() {
             <Download className="h-4 w-4 mr-2" />
             {exporting ? 'Exporting...' : 'Export Plan'}
           </Button>
-          <Button asChild>
-            <Link href="/matching">
-              <GitMerge className="h-4 w-4 mr-2" />
+          <Link href="/matching">
+            <Button>
+              <GitMerge className="h-4 w-4" />
               Start Matching
-            </Link>
-          </Button>
+            </Button>
+          </Link>
         </div>
       </div>
 
