@@ -12,6 +12,7 @@ import {
   Stethoscope,
   Users,
   GitMerge,
+  Calculator,
   Settings,
   LogOut,
   Menu,
@@ -41,6 +42,7 @@ const navigation: NavItem[] = [
   { name: 'Services', href: '/services', icon: Stethoscope },
   { name: 'Providers', href: '/providers', icon: Users },
   { name: 'Matching', href: '/matching', icon: GitMerge },
+  { name: 'Modeling', href: '/modeling', icon: Calculator },
 ];
 
 const adminNavigation: NavItem[] = [
