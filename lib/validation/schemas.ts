@@ -192,6 +192,19 @@ export const userRoleSchema = z.enum([
   'departmental_admin',
 ]);
 
+export const invitableRoleSchema = z.enum([
+  'health_system_admin',
+  'hospital_admin',
+  'departmental_admin',
+]);
+
+export const invitationStatusSchema = z.enum([
+  'pending',
+  'accepted',
+  'expired',
+  'revoked',
+]);
+
 // ============================================
 // COMPOSITE ENTITY SCHEMAS
 // ============================================
@@ -298,6 +311,30 @@ export const createAssignmentSchema = z.object({
   provider_id: uuidSchema,
   notes: safeTextSchema.optional(),
 });
+
+/**
+ * User invitation creation schema
+ */
+export const createInvitationSchema = z
+  .object({
+    email: emailSchema,
+    name: providerNameSchema.optional(),
+    role: invitableRoleSchema,
+    health_system_id: uuidSchema.optional(),
+    hospital_id: uuidSchema.optional(),
+    department_id: uuidSchema.optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.role === 'health_system_admin') return !!data.health_system_id;
+      if (data.role === 'hospital_admin') return !!data.hospital_id;
+      if (data.role === 'departmental_admin') return !!data.department_id;
+      return false;
+    },
+    {
+      message: 'Organization ID required for the selected role',
+    }
+  );
 
 // ============================================
 // HELPER FUNCTIONS
