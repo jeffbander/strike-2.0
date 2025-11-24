@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -16,14 +17,25 @@ import {
   Menu,
   X,
   ChevronLeft,
+  Shield,
+  UserPlus,
 } from 'lucide-react';
 import { UserButton } from '@clerk/nextjs';
 import { useState } from 'react';
 
-const navigation = [
+type UserRole = 'super_admin' | 'health_system_admin' | 'hospital_admin' | 'departmental_admin';
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  roles?: UserRole[]; // If undefined, visible to all authenticated users
+}
+
+const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Health Systems', href: '/health-systems', icon: Building2 },
-  { name: 'Hospitals', href: '/hospitals', icon: Building },
+  { name: 'Health Systems', href: '/health-systems', icon: Building2, roles: ['super_admin'] },
+  { name: 'Hospitals', href: '/hospitals', icon: Building, roles: ['super_admin', 'health_system_admin'] },
   { name: 'Departments', href: '/departments', icon: Layers },
   { name: 'Units', href: '/units', icon: Building },
   { name: 'Services', href: '/services', icon: Stethoscope },
@@ -31,10 +43,33 @@ const navigation = [
   { name: 'Matching', href: '/matching', icon: GitMerge },
 ];
 
+const adminNavigation: NavItem[] = [
+  {
+    name: 'User Management',
+    href: '/admin/users',
+    icon: UserPlus,
+    roles: ['super_admin', 'health_system_admin', 'hospital_admin', 'departmental_admin']
+  },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useUser();
+  const userRole = user?.publicMetadata?.role as UserRole | undefined;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Filter navigation items based on user role
+  const filterNavItems = (items: NavItem[]) => {
+    return items.filter(item => {
+      if (!item.roles) return true; // No role restriction
+      if (!userRole) return false; // User has no role
+      return item.roles.includes(userRole);
+    });
+  };
+
+  const visibleNavigation = filterNavItems(navigation);
+  const visibleAdminNavigation = filterNavItems(adminNavigation);
 
   return (
     <>
@@ -94,7 +129,7 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1 px-2">
-            {navigation.map((item) => {
+            {visibleNavigation.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <li key={item.name}>
@@ -117,6 +152,44 @@ export function Sidebar() {
               );
             })}
           </ul>
+
+          {/* Admin Section */}
+          {visibleAdminNavigation.length > 0 && (
+            <>
+              <div className={cn('mt-6 mb-2 px-4', collapsed && 'px-2')}>
+                {!collapsed && (
+                  <p className="text-xs font-semibold uppercase tracking-wider text-sidebar-text/60">
+                    Administration
+                  </p>
+                )}
+                {collapsed && <hr className="border-sidebar-hover" />}
+              </div>
+              <ul className="space-y-1 px-2">
+                {visibleAdminNavigation.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  return (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-sidebar-active text-white'
+                            : 'text-sidebar-text hover:bg-sidebar-hover hover:text-white',
+                          collapsed && 'justify-center'
+                        )}
+                        onClick={() => setMobileOpen(false)}
+                        title={collapsed ? item.name : undefined}
+                      >
+                        <item.icon className="h-5 w-5 flex-shrink-0" />
+                        {!collapsed && <span>{item.name}</span>}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </nav>
 
         {/* Footer */}

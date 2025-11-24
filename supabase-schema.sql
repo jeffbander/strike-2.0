@@ -371,6 +371,71 @@ CREATE INDEX idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
 CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
 
+-- 21. User Invitations (for role-based signup flow)
+CREATE TABLE user_invitations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- Invitation details
+  email VARCHAR(255) NOT NULL,
+  name VARCHAR(255),
+
+  -- Role assignment
+  role VARCHAR(50) NOT NULL CHECK (role IN ('health_system_admin', 'hospital_admin', 'departmental_admin')),
+
+  -- Organization assignment (based on role)
+  health_system_id UUID REFERENCES health_systems(id) ON DELETE CASCADE,
+  hospital_id UUID REFERENCES hospitals(id) ON DELETE CASCADE,
+  department_id UUID REFERENCES departments(id) ON DELETE CASCADE,
+
+  -- Invitation token (for secure signup link)
+  token VARCHAR(255) NOT NULL UNIQUE,
+
+  -- Status tracking
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '7 days'),
+  accepted_at TIMESTAMP WITH TIME ZONE,
+
+  -- Who created this invitation
+  invited_by VARCHAR(255) NOT NULL,
+  invited_by_role VARCHAR(50) NOT NULL,
+
+  -- The user who accepted (set after acceptance)
+  accepted_user_id VARCHAR(255),
+
+  CONSTRAINT valid_health_system_admin CHECK (
+    role != 'health_system_admin' OR health_system_id IS NOT NULL
+  ),
+  CONSTRAINT valid_hospital_admin CHECK (
+    role != 'hospital_admin' OR hospital_id IS NOT NULL
+  ),
+  CONSTRAINT valid_departmental_admin CHECK (
+    role != 'departmental_admin' OR department_id IS NOT NULL
+  )
+);
+
+CREATE INDEX idx_invitations_email ON user_invitations(email);
+CREATE INDEX idx_invitations_token ON user_invitations(token);
+CREATE INDEX idx_invitations_status ON user_invitations(status);
+CREATE INDEX idx_invitations_health_system ON user_invitations(health_system_id);
+CREATE INDEX idx_invitations_hospital ON user_invitations(hospital_id);
+CREATE INDEX idx_invitations_department ON user_invitations(department_id);
+
+-- 22. Super Admins (platform-level, created via backend only)
+CREATE TABLE super_admins (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id VARCHAR(255) NOT NULL UNIQUE,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX idx_super_admins_user ON super_admins(user_id);
+CREATE INDEX idx_super_admins_email ON super_admins(email);
+
 ---
 --- SEED DATA
 ---

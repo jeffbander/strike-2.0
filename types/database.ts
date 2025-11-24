@@ -257,6 +257,37 @@ export interface AuditLog {
   timestamp: Timestamp;
 }
 
+export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+
+export type InvitableRole = 'health_system_admin' | 'hospital_admin' | 'departmental_admin';
+
+export interface UserInvitation {
+  id: UUID;
+  email: string;
+  name?: string;
+  role: InvitableRole;
+  health_system_id?: UUID;
+  hospital_id?: UUID;
+  department_id?: UUID;
+  token: string;
+  status: InvitationStatus;
+  created_at: Timestamp;
+  expires_at: Timestamp;
+  accepted_at?: Timestamp;
+  invited_by: string;
+  invited_by_role: string;
+  accepted_user_id?: string;
+}
+
+export interface SuperAdmin {
+  id: UUID;
+  user_id: string;
+  email: string;
+  name: string;
+  created_at: Timestamp;
+  is_active: boolean;
+}
+
 // ============================================
 // VIEW TYPES (Joined data)
 // ============================================
@@ -411,6 +442,16 @@ export interface Database {
         Row: AuditLog;
         Insert: Omit<AuditLog, 'id'>;
         Update: never;
+      };
+      user_invitations: {
+        Row: UserInvitation;
+        Insert: Omit<UserInvitation, 'id' | 'created_at' | 'expires_at' | 'status'> & { status?: InvitationStatus };
+        Update: Partial<Pick<UserInvitation, 'status' | 'accepted_at' | 'accepted_user_id'>>;
+      };
+      super_admins: {
+        Row: SuperAdmin;
+        Insert: Omit<SuperAdmin, 'id' | 'created_at'>;
+        Update: Partial<Pick<SuperAdmin, 'name' | 'is_active'>>;
       };
     };
     Views: {
