@@ -37,10 +37,11 @@ interface Skill {
 
 interface ShiftConfig {
   name: string;
-  shift_type: 'Day' | 'Night' | 'Swing';
+  shift_type: 'Weekday_AM' | 'Weekday_PM' | 'Weekend_AM' | 'Weekend_PM' | 'Custom';
   start_time: string;
   end_time: string;
   positions_needed: number;
+  job_type_id?: string;
 }
 
 interface ServiceJobTypeConfig {
@@ -58,8 +59,8 @@ const STEPS = [
 ];
 
 const DEFAULT_SHIFTS: ShiftConfig[] = [
-  { name: 'Day Shift', shift_type: 'Day', start_time: '07:00', end_time: '19:00', positions_needed: 1 },
-  { name: 'Night Shift', shift_type: 'Night', start_time: '19:00', end_time: '07:00', positions_needed: 1 },
+  { name: 'Day Shift', shift_type: 'Weekday_AM', start_time: '07:00', end_time: '19:00', positions_needed: 1 },
+  { name: 'Night Shift', shift_type: 'Weekday_PM', start_time: '19:00', end_time: '07:00', positions_needed: 1 },
 ];
 
 export default function NewServicePage() {
@@ -95,8 +96,9 @@ export default function NewServicePage() {
   // Step 3: Job Types with skills
   const [serviceJobTypes, setServiceJobTypes] = useState<ServiceJobTypeConfig[]>([]);
 
-  // Step 4: Shifts
-  const [shifts, setShifts] = useState<ShiftConfig[]>(DEFAULT_SHIFTS);
+  // Step 4: Shifts - dynamically initialized based on operations
+  const [shifts, setShifts] = useState<ShiftConfig[]>([]);
+  const [shiftsInitialized, setShiftsInitialized] = useState(false);
 
   // Load reference data
   useEffect(() => {
@@ -132,6 +134,60 @@ export default function NewServicePage() {
     }
     loadData();
   }, []);
+
+  // Auto-generate default shifts when entering Step 4 based on operations
+  useEffect(() => {
+    if (currentStep === 4 && !shiftsInitialized && serviceJobTypes.length > 0) {
+      const defaultShifts: ShiftConfig[] = [];
+
+      // For each job type, create appropriate shifts based on operations
+      serviceJobTypes.forEach((sjt) => {
+        if (formData.operates_days) {
+          defaultShifts.push({
+            name: 'Weekday Day',
+            shift_type: 'Weekday_AM',
+            start_time: '07:00',
+            end_time: '19:00',
+            positions_needed: sjt.positions_per_shift,
+            job_type_id: sjt.job_type_id,
+          });
+        }
+        if (formData.operates_nights) {
+          defaultShifts.push({
+            name: 'Weekday Night',
+            shift_type: 'Weekday_PM',
+            start_time: '19:00',
+            end_time: '07:00',
+            positions_needed: sjt.positions_per_shift,
+            job_type_id: sjt.job_type_id,
+          });
+        }
+        if (formData.operates_weekends) {
+          defaultShifts.push({
+            name: 'Weekend Day',
+            shift_type: 'Weekend_AM',
+            start_time: '07:00',
+            end_time: '19:00',
+            positions_needed: sjt.positions_per_shift,
+            job_type_id: sjt.job_type_id,
+          });
+          defaultShifts.push({
+            name: 'Weekend Night',
+            shift_type: 'Weekend_PM',
+            start_time: '19:00',
+            end_time: '07:00',
+            positions_needed: sjt.positions_per_shift,
+            job_type_id: sjt.job_type_id,
+          });
+        }
+      });
+
+      if (defaultShifts.length > 0) {
+        setShifts(defaultShifts);
+        setShiftsInitialized(true);
+      }
+    }
+  }, [currentStep, shiftsInitialized, serviceJobTypes, formData.operates_days, formData.operates_nights, formData.operates_weekends]);
 
   // Filter departments and units by selected hospital
   const filteredDepartments = departments.filter(
@@ -209,10 +265,11 @@ export default function NewServicePage() {
       ...shifts,
       {
         name: `Shift ${shifts.length + 1}`,
-        shift_type: 'Day',
+        shift_type: 'Weekday_AM',
         start_time: '07:00',
         end_time: '19:00',
         positions_needed: 1,
+        job_type_id: serviceJobTypes[0]?.job_type_id,
       },
     ]);
   }
@@ -236,6 +293,18 @@ export default function NewServicePage() {
       const csrfRes = await fetch('/api/csrf');
       const { csrfToken } = await csrfRes.json();
 
+      // Transform job_types to use skill_ids instead of skills (API schema requirement)
+      const transformedJobTypes = serviceJobTypes.map((sjt) => ({
+        job_type_id: sjt.job_type_id,
+        skill_ids: sjt.skills,
+      }));
+
+      // Add job_type_id to shifts (use first job type if not specified)
+      const transformedShifts = shifts.map((shift) => ({
+        ...shift,
+        job_type_id: shift.job_type_id || (serviceJobTypes[0]?.job_type_id || ''),
+      }));
+
       const payload = {
         name: formData.name,
         hospital_id: formData.hospital_id,
@@ -247,8 +316,8 @@ export default function NewServicePage() {
         day_capacity: formData.day_capacity ? parseInt(formData.day_capacity) : null,
         night_capacity: formData.night_capacity ? parseInt(formData.night_capacity) : null,
         weekend_capacity: formData.weekend_capacity ? parseInt(formData.weekend_capacity) : null,
-        job_types: serviceJobTypes,
-        shifts: shifts,
+        job_types: transformedJobTypes,
+        shifts: transformedShifts,
       };
 
       const res = await fetch('/api/services', {
@@ -684,14 +753,16 @@ export default function NewServicePage() {
                         value={shift.shift_type}
                         onChange={(e) =>
                           updateShift(index, {
-                            shift_type: e.target.value as 'Day' | 'Night' | 'Swing',
+                            shift_type: e.target.value as ShiftConfig['shift_type'],
                           })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       >
-                        <option value="Day">Day</option>
-                        <option value="Night">Night</option>
-                        <option value="Swing">Swing</option>
+                        <option value="Weekday_AM">Weekday Day</option>
+                        <option value="Weekday_PM">Weekday Night</option>
+                        <option value="Weekend_AM">Weekend Day</option>
+                        <option value="Weekend_PM">Weekend Night</option>
+                        <option value="Custom">Custom</option>
                       </select>
                     </div>
                     <div>
@@ -855,14 +926,23 @@ export default function NewServicePage() {
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="text-sm font-medium text-gray-700 mb-3">Shifts ({shifts.length})</h3>
               <div className="space-y-2">
-                {shifts.map((shift, index) => (
-                  <div key={index} className="flex justify-between items-center text-sm">
-                    <span className="font-medium text-gray-900">{shift.name}</span>
-                    <span className="text-gray-500">
-                      {shift.start_time} - {shift.end_time} ({shift.shift_type}), {shift.positions_needed} positions
-                    </span>
-                  </div>
-                ))}
+                {shifts.map((shift, index) => {
+                  const shiftTypeLabels: Record<string, string> = {
+                    'Weekday_AM': 'Weekday Day',
+                    'Weekday_PM': 'Weekday Night',
+                    'Weekend_AM': 'Weekend Day',
+                    'Weekend_PM': 'Weekend Night',
+                    'Custom': 'Custom',
+                  };
+                  return (
+                    <div key={index} className="flex justify-between items-center text-sm">
+                      <span className="font-medium text-gray-900">{shift.name}</span>
+                      <span className="text-gray-500">
+                        {shift.start_time} - {shift.end_time} ({shiftTypeLabels[shift.shift_type] || shift.shift_type}), {shift.positions_needed} positions
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

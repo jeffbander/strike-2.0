@@ -147,6 +147,7 @@ export const capacitySchema = z
   .int('Must be a whole number')
   .min(0, 'Cannot be negative')
   .max(1000, 'Capacity seems unrealistically high')
+  .nullable()
   .optional();
 
 /**
@@ -249,10 +250,10 @@ export const createUnitSchema = z.object({
 });
 
 /**
- * Job Type creation schema
+ * Job Type creation schema (scoped to health system level)
  */
 export const createJobTypeSchema = z.object({
-  hospital_id: uuidSchema,
+  health_system_id: uuidSchema,
   name: safeTextSchema,
   code: jobTypeCodeSchema,
   description: safeTextSchema.optional(),
@@ -280,7 +281,7 @@ export const createServiceSchema = z.object({
   department_id: uuidSchema,
   hospital_id: uuidSchema,
   name: serviceNameSchema,
-  unit_id: uuidSchema.optional(),
+  unit_id: uuidSchema.nullable().optional(),
   day_capacity: capacitySchema,
   night_capacity: capacitySchema,
   weekend_capacity: capacitySchema,

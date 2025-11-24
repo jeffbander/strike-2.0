@@ -20,7 +20,7 @@ import {
   Shield,
   UserPlus,
 } from 'lucide-react';
-import { UserButton } from '@clerk/nextjs';
+import { UserButton, useClerk } from '@clerk/nextjs';
 import { useState } from 'react';
 
 type UserRole = 'super_admin' | 'health_system_admin' | 'hospital_admin' | 'departmental_admin';
@@ -55,15 +55,23 @@ const adminNavigation: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
+  const { signOut } = useClerk();
   const userRole = user?.publicMetadata?.role as UserRole | undefined;
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Check if in development mode - use process.env for SSR consistency
+  // This value is the same on both server and client, preventing hydration mismatches
+  const isDev = process.env.NODE_ENV === 'development';
+
   // Filter navigation items based on user role
+  // In dev mode without a role, show all items (user gets super_admin on backend)
   const filterNavItems = (items: NavItem[]) => {
     return items.filter(item => {
       if (!item.roles) return true; // No role restriction
-      if (!userRole) return false; // User has no role
+      // DEV MODE: Show all items if no role is set (backend treats as super_admin)
+      if (!userRole && isDev) return true;
+      if (!userRole) return false; // User has no role in production
       return item.roles.includes(userRole);
     });
   };
@@ -193,7 +201,7 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-sidebar-hover p-4">
+        <div className="border-t border-sidebar-hover p-4 space-y-3">
           <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
             <UserButton
               appearance={{
@@ -204,11 +212,23 @@ export function Sidebar() {
             />
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Account</p>
-                <p className="text-xs text-sidebar-text truncate">Settings</p>
+                <p className="text-sm font-medium text-white truncate">{user?.firstName || 'Account'}</p>
+                <p className="text-xs text-sidebar-text truncate">{user?.primaryEmailAddress?.emailAddress || 'Settings'}</p>
               </div>
             )}
           </div>
+          <button
+            onClick={() => signOut({ redirectUrl: '/' })}
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors w-full',
+              'text-sidebar-text hover:bg-sidebar-hover hover:text-white',
+              collapsed && 'justify-center'
+            )}
+            title={collapsed ? 'Sign Out' : undefined}
+          >
+            <LogOut className="h-5 w-5 flex-shrink-0" />
+            {!collapsed && <span>Sign Out</span>}
+          </button>
         </div>
 
         {/* Collapse toggle (desktop only) */}

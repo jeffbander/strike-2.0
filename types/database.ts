@@ -110,7 +110,7 @@ export interface DepartmentalAdmin {
 
 export interface JobType {
   id: UUID;
-  hospital_id: UUID;
+  health_system_id: UUID;
   name: string;
   code: string;
   is_default: boolean;
@@ -493,12 +493,15 @@ export const DEFAULT_DEPARTMENTS = [
 ] as const;
 
 export const DEFAULT_JOB_TYPES = [
+  { name: 'Certified Nursing Assistant', code: 'CNA' },
+  { name: 'Fellow', code: 'FEL' },
+  { name: 'Licensed Practical Nurse', code: 'LPN' },
   { name: 'Medical Doctor', code: 'MD' },
+  { name: 'Medical Technician', code: 'MT' },
   { name: 'Nurse Practitioner', code: 'NP' },
   { name: 'Physician Assistant', code: 'PA' },
   { name: 'Registered Nurse', code: 'RN' },
-  { name: 'Fellow', code: 'FELLOW' },
-  { name: 'Resident', code: 'RESIDENT' },
+  { name: 'Resident', code: 'RES' },
 ] as const;
 
 export const DEFAULT_SKILLS = {

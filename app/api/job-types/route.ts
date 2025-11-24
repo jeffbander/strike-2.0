@@ -3,7 +3,7 @@ import { withRateLimit } from '@/lib/security/withRateLimit';
 import { withCsrf } from '@/lib/security/withCsrf';
 import { validateRequest } from '@/lib/security/validateRequest';
 import { handleApiError } from '@/lib/security/errorHandler';
-import { requireRole, checkHospitalAccess } from '@/lib/auth/authorization';
+import { requireRole, checkHealthSystemAccess } from '@/lib/auth/authorization';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/logger';
 import { createJobTypeSchema } from '@/lib/validation/schemas';
@@ -11,11 +11,11 @@ import { DEFAULT_JOB_TYPES } from '@/types/database';
 
 /**
  * GET /api/job-types
- * List job types based on user's access level
+ * List job types based on user's access level (scoped to health system)
  */
 export async function GET(request: NextRequest) {
   try {
-    const { hospitalId, role } = await requireRole([
+    const { healthSystemId, hospitalId, role } = await requireRole([
       'super_admin',
       'health_system_admin',
       'hospital_admin',
@@ -23,18 +23,29 @@ export async function GET(request: NextRequest) {
     ]);
 
     const searchParams = request.nextUrl.searchParams;
-    const filterHospitalId = searchParams.get('hospital_id');
+    const filterHealthSystemId = searchParams.get('health_system_id');
 
     let query = supabaseAdmin
       .from('job_types')
-      .select('*, hospitals(name, short_code)')
+      .select('*, health_systems(name)')
       .eq('is_active', true);
 
-    // Filter by hospital
-    if (filterHospitalId) {
-      query = query.eq('hospital_id', filterHospitalId);
+    // Filter by health system
+    if (filterHealthSystemId) {
+      query = query.eq('health_system_id', filterHealthSystemId);
+    } else if (role === 'health_system_admin' && healthSystemId) {
+      query = query.eq('health_system_id', healthSystemId);
     } else if ((role === 'hospital_admin' || role === 'departmental_admin') && hospitalId) {
-      query = query.eq('hospital_id', hospitalId);
+      // Get health system from user's hospital
+      const { data: hospital } = await supabaseAdmin
+        .from('hospitals')
+        .select('health_system_id')
+        .eq('id', hospitalId)
+        .single();
+
+      if (hospital?.health_system_id) {
+        query = query.eq('health_system_id', hospital.health_system_id);
+      }
     }
 
     const { data, error } = await query.order('name');
@@ -49,24 +60,23 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/job-types
- * Create a new job type
+ * Create a new job type at the health system level
  */
 async function createHandler(request: NextRequest) {
   try {
     const { userId } = await requireRole([
       'super_admin',
       'health_system_admin',
-      'hospital_admin',
     ]);
 
     const body = await request.json();
     const validation = validateRequest(createJobTypeSchema, body);
     if (!validation.success) return validation.response;
 
-    // Check hospital access
-    const hasAccess = await checkHospitalAccess(userId, validation.data.hospital_id);
+    // Check health system access
+    const hasAccess = await checkHealthSystemAccess(userId, validation.data.health_system_id);
     if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied to hospital' }, { status: 403 });
+      return NextResponse.json({ error: 'Access denied to health system' }, { status: 403 });
     }
 
     const isDefault = DEFAULT_JOB_TYPES.some((jt) => jt.code === validation.data.code);
@@ -74,7 +84,7 @@ async function createHandler(request: NextRequest) {
     const { data, error } = await supabaseAdmin
       .from('job_types')
       .insert({
-        hospital_id: validation.data.hospital_id,
+        health_system_id: validation.data.health_system_id,
         name: validation.data.name,
         code: validation.data.code,
         description: validation.data.description,
@@ -102,11 +112,11 @@ async function createHandler(request: NextRequest) {
 export const POST = withRateLimit(withCsrf(createHandler));
 
 /**
- * Initialize default job types for a hospital
+ * Initialize default job types for a health system
  */
-export async function initializeDefaultJobTypes(hospitalId: string) {
+export async function initializeDefaultJobTypes(healthSystemId: string) {
   const jobTypes = DEFAULT_JOB_TYPES.map((jt) => ({
-    hospital_id: hospitalId,
+    health_system_id: healthSystemId,
     name: jt.name,
     code: jt.code,
     is_default: true,

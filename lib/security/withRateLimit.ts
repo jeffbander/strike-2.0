@@ -7,7 +7,9 @@ type Handler = (req: NextRequest) => Promise<NextResponse>;
 const requests = new Map<string, number[]>();
 
 // Rate limit configuration
-const DEFAULT_LIMIT = 5; // requests
+// More generous in development, stricter in production
+const isDev = process.env.NODE_ENV === 'development';
+const DEFAULT_LIMIT = isDev ? 100 : 30; // requests per window
 const DEFAULT_WINDOW = 60 * 1000; // 1 minute in milliseconds
 
 interface RateLimitOptions {

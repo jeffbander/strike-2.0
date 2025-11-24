@@ -13,8 +13,14 @@ interface Hospital {
   health_systems?: { name: string };
 }
 
+interface HealthSystem {
+  id: string;
+  name: string;
+}
+
 export default function HospitalsPage() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [healthSystems, setHealthSystems] = useState<HealthSystem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -29,6 +35,7 @@ export default function HospitalsPage() {
 
   useEffect(() => {
     fetchHospitals();
+    fetchHealthSystems();
   }, []);
 
   async function fetchHospitals() {
@@ -42,6 +49,18 @@ export default function HospitalsPage() {
       console.error('Error fetching hospitals:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchHealthSystems() {
+    try {
+      const res = await fetch('/api/health-systems');
+      const data = await res.json();
+      if (data.success || data.healthSystems || data.data) {
+        setHealthSystems(data.healthSystems || data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching health systems:', error);
     }
   }
 
@@ -180,6 +199,31 @@ export default function HospitalsPage() {
                     {error}
                   </div>
                 )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Health System *
+                  </label>
+                  <select
+                    value={formData.health_system_id}
+                    onChange={(e) =>
+                      setFormData({ ...formData, health_system_id: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    required
+                  >
+                    <option value="">Select a health system...</option>
+                    {healthSystems.map((hs) => (
+                      <option key={hs.id} value={hs.id}>
+                        {hs.name}
+                      </option>
+                    ))}
+                  </select>
+                  {healthSystems.length === 0 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      No health systems found. Create one first in Health Systems.
+                    </p>
+                  )}
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Hospital Name *

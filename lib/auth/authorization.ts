@@ -43,6 +43,24 @@ export async function requireRole(
   const user = await client.users.getUser(userId);
 
   const userRole = user.publicMetadata?.role as UserRole | undefined;
+  const validRoles: UserRole[] = ['super_admin', 'health_system_admin', 'hospital_admin', 'departmental_admin'];
+
+  // DEV MODE: Always default to super_admin for local testing
+  // This allows development without needing to set up proper role metadata
+  // IMPORTANT: Remove or disable this bypass before deploying to production!
+  if (process.env.NODE_ENV === 'development') {
+    const isValidRole = userRole && validRoles.includes(userRole);
+    if (!isValidRole) {
+      console.warn('[DEV] Invalid or missing role, defaulting to super_admin for testing');
+      return {
+        userId,
+        role: 'super_admin',
+        healthSystemId: undefined,
+        hospitalId: undefined,
+        departmentId: undefined,
+      };
+    }
+  }
 
   if (!userRole || !allowedRoles.includes(userRole)) {
     throw new Error('Insufficient permissions');
@@ -68,6 +86,12 @@ export async function checkHealthSystemAccess(
   const user = await client.users.getUser(userId);
   const role = user.publicMetadata?.role as UserRole;
   const userHealthSystemId = user.publicMetadata?.healthSystemId as string;
+
+  // DEV MODE: If no role is set, allow access for local testing
+  if (process.env.NODE_ENV === 'development' && !role) {
+    console.warn('[DEV] No role set for user, allowing health system access for testing');
+    return true;
+  }
 
   // Super admins have access to all health systems
   if (role === 'super_admin') return true;
@@ -102,6 +126,12 @@ export async function checkHospitalAccess(
   const user = await client.users.getUser(userId);
   const role = user.publicMetadata?.role as UserRole;
   const userHospitalId = user.publicMetadata?.hospitalId as string;
+
+  // DEV MODE: If no role is set, allow access for local testing
+  if (process.env.NODE_ENV === 'development' && !role) {
+    console.warn('[DEV] No role set for user, allowing hospital access for testing');
+    return true;
+  }
 
   // Super admins have access to all hospitals
   if (role === 'super_admin') return true;
@@ -138,6 +168,12 @@ export async function checkDepartmentAccess(
   const client = await clerkClient();
   const user = await client.users.getUser(userId);
   const role = user.publicMetadata?.role as UserRole;
+
+  // DEV MODE: If no role is set, allow access for local testing
+  if (process.env.NODE_ENV === 'development' && !role) {
+    console.warn('[DEV] No role set for user, allowing department access for testing');
+    return true;
+  }
 
   // Super admins have access to all departments
   if (role === 'super_admin') return true;
