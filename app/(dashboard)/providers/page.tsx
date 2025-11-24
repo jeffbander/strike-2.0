@@ -198,18 +198,60 @@ export default function ProvidersPage() {
         return;
       }
 
-      // Parse header
+      // Parse header - support both new format and legacy format
       const header = lines[0].split(',').map((h) => h.trim().toLowerCase());
-      const nameIdx = header.indexOf('name');
-      const emailIdx = header.indexOf('email');
-      const phoneIdx = header.indexOf('phone');
-      const typeIdx = header.findIndex((h) => h.includes('type') || h === 'job_type');
-      const skillsIdx = header.indexOf('skills');
-      const hospitalsIdx = header.indexOf('hospitals');
 
-      if (nameIdx === -1 || emailIdx === -1) {
-        setUploadError('CSV must have Name and Email columns');
-        return;
+      // Check for legacy format (Role, Last Name, First Name, etc.)
+      const isLegacyFormat = header.includes('role') && header.includes('last name') && header.includes('first name');
+
+      let nameIdx = -1;
+      let emailIdx = -1;
+      let phoneIdx = -1;
+      let typeIdx = -1;
+      let skillsIdx = -1;
+      let hospitalsIdx = -1;
+
+      // Legacy format column indices
+      let roleIdx = -1;
+      let lastNameIdx = -1;
+      let firstNameIdx = -1;
+      let lifeNumberIdx = -1;
+      let homeSiteIdx = -1;
+      let homeDeptIdx = -1;
+      let supervisingMDIdx = -1;
+      let certificationIdx = -1;
+      let experienceIdx = -1;
+      let scheduleDaysIdx = -1;
+      let scheduleTimeIdx = -1;
+
+      if (isLegacyFormat) {
+        // Map legacy columns
+        roleIdx = header.indexOf('role');
+        lastNameIdx = header.indexOf('last name');
+        firstNameIdx = header.indexOf('first name');
+        lifeNumberIdx = header.indexOf('life #');
+        phoneIdx = header.indexOf('employee cell #');
+        scheduleDaysIdx = header.findIndex(h => h.includes('schedule') && h.includes('days'));
+        scheduleTimeIdx = header.findIndex(h => h.includes('schedule') && h.includes('time'));
+        homeSiteIdx = header.indexOf('home site');
+        homeDeptIdx = header.indexOf('home department');
+        supervisingMDIdx = header.findIndex(h => h.includes('supervising') || h.includes('collaborating'));
+        certificationIdx = header.findIndex(h => h.includes('certification'));
+        experienceIdx = header.findIndex(h => h.includes('experience'));
+        // Note: MSH Only, MSM/W Only, All 3 sites columns are ignored for now
+      } else {
+        // New format
+        nameIdx = header.indexOf('name');
+        emailIdx = header.indexOf('email');
+        phoneIdx = header.indexOf('phone');
+        typeIdx = header.findIndex((h) => h.includes('type') || h === 'job_type');
+        skillsIdx = header.indexOf('skills');
+        hospitalsIdx = header.indexOf('hospitals');
+
+        if (nameIdx === -1 || emailIdx === -1) {
+          setUploadError('CSV must have Name and Email columns (or use legacy format with Role, Last Name, First Name)');
+          return;
+        }
       }
 
       const csrfRes = await fetch('/api/csrf');
@@ -223,34 +265,120 @@ export default function ProvidersPage() {
         const row = parseCSVRow(lines[i]);
         if (row.length === 0) continue;
 
-        const name = row[nameIdx]?.trim();
-        const email = row[emailIdx]?.trim();
-        const phone = phoneIdx !== -1 ? row[phoneIdx]?.trim() : '';
-        const typeName = typeIdx !== -1 ? row[typeIdx]?.trim() : '';
-        const skillsStr = skillsIdx !== -1 ? row[skillsIdx]?.trim() : '';
-        const hospitalsStr = hospitalsIdx !== -1 ? row[hospitalsIdx]?.trim() : '';
+        let name = '';
+        let email = '';
+        let phone = '';
+        let typeName = '';
+        let skillsStr = '';
+        let hospitalsStr = '';
+        let availabilityComments = '';
+        let homeDepartmentName = '';
+        let homeHospitalCode = '';
 
-        if (!name || !email) {
+        if (isLegacyFormat) {
+          // Legacy format processing
+          const firstName = firstNameIdx !== -1 ? row[firstNameIdx]?.trim() : '';
+          const lastName = lastNameIdx !== -1 ? row[lastNameIdx]?.trim() : '';
+
+          // Skip empty rows
+          if (!firstName && !lastName) continue;
+
+          name = `${firstName} ${lastName}`.trim();
+
+          // Generate placeholder email from name
+          const emailBase = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`.replace(/[^a-z.]/g, '');
+          email = `${emailBase}@placeholder.com`;
+
+          phone = phoneIdx !== -1 ? row[phoneIdx]?.trim() : '';
+
+          // Map role to job type
+          const role = roleIdx !== -1 ? row[roleIdx]?.trim() : '';
+          typeName = mapLegacyRole(role);
+
+          // Get certification as skills
+          const certification = certificationIdx !== -1 ? row[certificationIdx]?.trim() : '';
+          skillsStr = certification;
+
+          // Get home site
+          homeHospitalCode = homeSiteIdx !== -1 ? row[homeSiteIdx]?.trim() : '';
+          homeDepartmentName = homeDeptIdx !== -1 ? row[homeDeptIdx]?.trim() : '';
+
+          // Build availability comments from extra fields
+          const scheduleDays = scheduleDaysIdx !== -1 ? row[scheduleDaysIdx]?.trim() : '';
+          const scheduleTime = scheduleTimeIdx !== -1 ? row[scheduleTimeIdx]?.trim() : '';
+          const supervisingMD = supervisingMDIdx !== -1 ? row[supervisingMDIdx]?.trim() : '';
+          const experience = experienceIdx !== -1 ? row[experienceIdx]?.trim() : '';
+          const lifeNumber = lifeNumberIdx !== -1 ? row[lifeNumberIdx]?.trim() : '';
+
+          const comments = [];
+          if (lifeNumber) comments.push(`Life#: ${lifeNumber}`);
+          if (scheduleDays) comments.push(`Schedule: ${scheduleDays}`);
+          if (scheduleTime) comments.push(`Time: ${scheduleTime}`);
+          if (supervisingMD) comments.push(`Supervising MD: ${supervisingMD}`);
+          if (experience) comments.push(`Experience: ${experience}`);
+          availabilityComments = comments.join('; ');
+
+        } else {
+          // New format processing
+          name = row[nameIdx]?.trim() || '';
+          email = row[emailIdx]?.trim() || '';
+          phone = phoneIdx !== -1 ? row[phoneIdx]?.trim() : '';
+          typeName = typeIdx !== -1 ? row[typeIdx]?.trim() : '';
+          skillsStr = skillsIdx !== -1 ? row[skillsIdx]?.trim() : '';
+          hospitalsStr = hospitalsIdx !== -1 ? row[hospitalsIdx]?.trim() : '';
+        }
+
+        if (!name) {
           failedCount++;
           continue;
         }
 
         // Find job type by code or name
         const jobType = jobTypes.find(
-          (jt) => jt.code === typeName || jt.name.toLowerCase() === typeName.toLowerCase()
+          (jt) => jt.code.toLowerCase() === typeName.toLowerCase() ||
+                  jt.name.toLowerCase() === typeName.toLowerCase()
         );
 
-        // Find skills by name
-        const skillNames = skillsStr.split('|').map((s) => s.trim()).filter(Boolean);
+        // Find skills by name (support pipe-separated or comma-separated)
+        const skillNames = skillsStr.split(/[|,]/).map((s) => s.trim()).filter(Boolean);
         const skillIds = skillNames
-          .map((sn) => skills.find((s) => s.name.toLowerCase() === sn.toLowerCase())?.id)
+          .map((sn) => skills.find((s) => s.name.toLowerCase().includes(sn.toLowerCase()) ||
+                                          sn.toLowerCase().includes(s.name.toLowerCase()))?.id)
           .filter((id): id is string => !!id);
 
-        // Find hospitals by short code
-        const hospitalCodes = hospitalsStr.split('|').map((h) => h.trim()).filter(Boolean);
-        const hospitalIds = hospitalCodes
-          .map((code) => hospitals.find((h) => h.short_code === code)?.id)
-          .filter((id): id is string => !!id);
+        // Find hospitals by short code (for new format)
+        let hospitalIds: string[] = [];
+        if (hospitalsStr) {
+          const hospitalCodes = hospitalsStr.split('|').map((h) => h.trim()).filter(Boolean);
+          hospitalIds = hospitalCodes
+            .map((code) => hospitals.find((h) => h.short_code === code)?.id)
+            .filter((id): id is string => !!id);
+        }
+
+        // For legacy format, find home hospital
+        let homeHospitalId = '';
+        let homeDepartmentId = '';
+        if (homeHospitalCode) {
+          const homeHospital = hospitals.find(h =>
+            h.short_code.toLowerCase() === homeHospitalCode.toLowerCase() ||
+            h.name.toLowerCase().includes(homeHospitalCode.toLowerCase())
+          );
+          if (homeHospital) {
+            homeHospitalId = homeHospital.id;
+            hospitalIds = [homeHospital.id]; // Set hospital access to home hospital
+
+            // Find home department in that hospital
+            if (homeDepartmentName) {
+              const homeDept = departments.find(d =>
+                d.hospital_id === homeHospital.id &&
+                d.name.toLowerCase() === homeDepartmentName.toLowerCase()
+              );
+              if (homeDept) {
+                homeDepartmentId = homeDept.id;
+              }
+            }
+          }
+        }
 
         try {
           const res = await fetch('/api/providers', {
@@ -266,6 +394,9 @@ export default function ProvidersPage() {
               job_type_id: jobType?.id || jobTypes[0]?.id,
               skills: skillIds,
               hospital_access: hospitalIds,
+              home_hospital_id: homeHospitalId || null,
+              home_department_id: homeDepartmentId || null,
+              availability_comments: availabilityComments || null,
             }),
           });
 
@@ -292,6 +423,26 @@ export default function ProvidersPage() {
         fileInputRef.current.value = '';
       }
     }
+  }
+
+  // Map legacy role names to job type codes
+  function mapLegacyRole(role: string): string {
+    const roleMap: Record<string, string> = {
+      'physician': 'MD',
+      'doctor': 'MD',
+      'md': 'MD',
+      'np': 'NP',
+      'nurse practitioner': 'NP',
+      'pa': 'PA',
+      'physician assistant': 'PA',
+      'rn': 'RN',
+      'registered nurse': 'RN',
+      'fellow': 'FEL',
+      'resident': 'RES',
+      'cna': 'CNA',
+      'lpn': 'LPN',
+    };
+    return roleMap[role.toLowerCase()] || role;
   }
 
   // Simple CSV row parser handling quoted values
@@ -702,19 +853,37 @@ export default function ProvidersPage() {
             </div>
             <div className="p-6 space-y-4">
               <div className="bg-gray-50 rounded-lg p-4">
-                <h3 className="font-medium text-gray-900 mb-2">CSV Format</h3>
-                <p className="text-sm text-gray-600 mb-3">
-                  Your CSV file should have these columns:
-                </p>
-                <code className="text-xs bg-gray-100 p-2 rounded block overflow-x-auto mb-3">
-                  Name, Email, Phone, Type, Skills, Hospitals
-                </code>
-                <ul className="text-xs text-gray-500 space-y-1">
-                  <li>• <strong>Name</strong> and <strong>Email</strong> are required</li>
-                  <li>• <strong>Type</strong>: Job type code (MD, RN, etc.)</li>
-                  <li>• <strong>Skills</strong>: Pipe-separated (BLS|ACLS|ICU)</li>
-                  <li>• <strong>Hospitals</strong>: Pipe-separated codes (MSH|MSM)</li>
-                </ul>
+                <h3 className="font-medium text-gray-900 mb-2">Supported CSV Formats</h3>
+
+                {/* Legacy Format */}
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-1">Legacy Format (backward compatible):</p>
+                  <code className="text-xs bg-gray-100 p-2 rounded block overflow-x-auto mb-2">
+                    Role, Last Name, First Name, Life #, Employee Cell #, ...
+                  </code>
+                  <ul className="text-xs text-gray-500 space-y-1 ml-3">
+                    <li>• <strong>Role</strong>: Physician, NP, PA, RN, etc.</li>
+                    <li>• <strong>Home Site</strong>: Hospital short code (MSH, etc.)</li>
+                    <li>• <strong>Home Department</strong>: Department name</li>
+                    <li>• <strong>Certification</strong>: Maps to skills dropdown</li>
+                    <li>• Hospital restriction columns (MSH Only, etc.) are ignored</li>
+                  </ul>
+                </div>
+
+                {/* New Format */}
+                <div className="border-t border-gray-200 pt-3">
+                  <p className="text-sm font-medium text-gray-700 mb-1">New Format:</p>
+                  <code className="text-xs bg-gray-100 p-2 rounded block overflow-x-auto mb-2">
+                    Name, Email, Phone, Type, Skills, Hospitals
+                  </code>
+                  <ul className="text-xs text-gray-500 space-y-1 ml-3">
+                    <li>• <strong>Name</strong> and <strong>Email</strong> are required</li>
+                    <li>• <strong>Type</strong>: Job type code (MD, RN, etc.)</li>
+                    <li>• <strong>Skills</strong>: Pipe-separated (BLS|ACLS)</li>
+                    <li>• <strong>Hospitals</strong>: Pipe-separated codes (MSH|MSM)</li>
+                  </ul>
+                </div>
+
                 <Button
                   variant="outline"
                   className="mt-3 w-full"
