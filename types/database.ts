@@ -453,6 +453,21 @@ export interface Database {
         Insert: Omit<SuperAdmin, 'id' | 'created_at'>;
         Update: Partial<Pick<SuperAdmin, 'name' | 'is_active'>>;
       };
+      staffing_scenarios: {
+        Row: StaffingScenario;
+        Insert: Omit<StaffingScenario, 'id' | 'created_at' | 'last_modified_at'>;
+        Update: Partial<Omit<StaffingScenario, 'id' | 'created_at'>>;
+      };
+      scenario_service_configs: {
+        Row: ScenarioServiceConfig;
+        Insert: Omit<ScenarioServiceConfig, 'id' | 'created_at'>;
+        Update: Partial<Omit<ScenarioServiceConfig, 'id' | 'created_at'>>;
+      };
+      scenario_staffing_results: {
+        Row: ScenarioStaffingResult;
+        Insert: Omit<ScenarioStaffingResult, 'id' | 'created_at'>;
+        Update: never;
+      };
     };
     Views: {
       job_positions_detail: {
@@ -503,6 +518,70 @@ export const DEFAULT_JOB_TYPES = [
   { name: 'Registered Nurse', code: 'RN' },
   { name: 'Resident', code: 'RES' },
 ] as const;
+
+// ============================================
+// MODELING / SCENARIO TYPES
+// ============================================
+
+export interface StaffingScenario {
+  id: UUID;
+  name: string;
+  description?: string;
+  hospital_id: UUID;
+  department_id?: UUID;
+  created_at: Timestamp;
+  created_by: UUID;
+  last_modified_at: Timestamp;
+  is_active: boolean;
+}
+
+export interface ScenarioServiceConfig {
+  id: UUID;
+  scenario_id: UUID;
+  service_id: UUID;
+  // Volume/capacity adjustments
+  volume_percentage: number; // 0-100, e.g., 50 = 50% of normal volume
+  // Operating hours overrides (null = use service default)
+  operates_days: boolean | null;
+  operates_nights: boolean | null;
+  operates_weekends: boolean | null;
+  // Capacity overrides (null = calculate from percentage)
+  day_capacity_override?: number;
+  night_capacity_override?: number;
+  weekend_capacity_override?: number;
+  // Whether service is included in scenario
+  is_enabled: boolean;
+  created_at: Timestamp;
+}
+
+export interface ScenarioStaffingResult {
+  id: UUID;
+  scenario_id: UUID;
+  service_id: UUID;
+  job_type_id: UUID;
+  shift_type: ShiftType;
+  // Calculated staffing needs
+  original_positions: number;
+  adjusted_positions: number;
+  created_at: Timestamp;
+}
+
+// View type for scenario details
+export interface ScenarioDetail {
+  id: UUID;
+  name: string;
+  description?: string;
+  hospital_name: string;
+  hospital_id: UUID;
+  department_name?: string;
+  department_id?: UUID;
+  total_services: number;
+  enabled_services: number;
+  total_original_positions: number;
+  total_adjusted_positions: number;
+  created_at: Timestamp;
+  last_modified_at: Timestamp;
+}
 
 export const DEFAULT_SKILLS = {
   Basic: ['Medicine Basics', 'Surgical Basics'],
