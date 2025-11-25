@@ -8,11 +8,13 @@ interface Provider {
   name: string;
   email: string;
   phone?: string;
-  departments?: { name: string };
-  hospitals?: { name: string; short_code: string };
+  hospital_id?: string;
+  department_id?: string;
+  departments?: { id: string; name: string };
+  hospitals?: { id: string; name: string; short_code: string };
   job_types?: { id: string; name: string; code: string };
-  provider_skills?: Array<{ skills: { id: string; name: string; category: string } }>;
-  provider_hospital_access?: Array<{ hospitals: { id: string; short_code: string } }>;
+  provider_skills?: Array<{ skill_id: string; skills: { id: string; name: string; category: string } }>;
+  provider_hospital_access?: Array<{ hospital_id: string; hospitals: { id: string; name: string; short_code: string } }>;
   assignments?: Array<{ status: string; job_positions?: { job_code: string } }>;
 }
 
@@ -48,14 +50,29 @@ export default function ProvidersPage() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadResults, setUploadResults] = useState<{ success: number; failed: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    job_type_id: '',
+    home_hospital_id: '',
+    home_department_id: '',
+    selectedSkills: [] as string[],
+    hospitalAccess: [] as string[],
+  });
+
+  // Edit form state
+  const [editFormData, setEditFormData] = useState({
     name: '',
     email: '',
     phone: '',
@@ -131,10 +148,10 @@ export default function ProvidersPage() {
           email: formData.email,
           phone: formData.phone || null,
           job_type_id: formData.job_type_id,
-          home_hospital_id: formData.home_hospital_id || null,
-          home_department_id: formData.home_department_id || null,
-          skills: formData.selectedSkills,
-          hospital_access: formData.hospitalAccess,
+          hospital_id: formData.home_hospital_id || null,
+          department_id: formData.home_department_id || null,
+          skill_ids: formData.selectedSkills,
+          hospital_access_ids: formData.hospitalAccess,
         }),
       });
 
@@ -181,6 +198,90 @@ export default function ProvidersPage() {
     }));
   }
 
+  function toggleEditSkill(skillId: string) {
+    setEditFormData((prev) => ({
+      ...prev,
+      selectedSkills: prev.selectedSkills.includes(skillId)
+        ? prev.selectedSkills.filter((s) => s !== skillId)
+        : [...prev.selectedSkills, skillId],
+    }));
+  }
+
+  function toggleEditHospitalAccess(hospitalId: string) {
+    setEditFormData((prev) => ({
+      ...prev,
+      hospitalAccess: prev.hospitalAccess.includes(hospitalId)
+        ? prev.hospitalAccess.filter((h) => h !== hospitalId)
+        : [...prev.hospitalAccess, hospitalId],
+    }));
+  }
+
+  function openEditModal(provider: Provider) {
+    setEditingProvider(provider);
+    setEditFormData({
+      name: provider.name,
+      email: provider.email,
+      phone: provider.phone || '',
+      job_type_id: provider.job_types?.id || '',
+      home_hospital_id: provider.hospital_id || provider.hospitals?.id || '',
+      home_department_id: provider.department_id || provider.departments?.id || '',
+      selectedSkills: provider.provider_skills?.map(ps => ps.skill_id || ps.skills?.id).filter((id): id is string => !!id) || [],
+      hospitalAccess: provider.provider_hospital_access?.map(a => a.hospital_id || a.hospitals?.id).filter((id): id is string => !!id) || [],
+    });
+    setError(null);
+    setShowEditModal(true);
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingProvider) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const csrfRes = await fetch('/api/csrf');
+      const { csrfToken } = await csrfRes.json();
+
+      const res = await fetch(`/api/providers/${editingProvider.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify({
+          name: editFormData.name,
+          email: editFormData.email,
+          phone: editFormData.phone || null,
+          job_type_id: editFormData.job_type_id,
+          hospital_id: editFormData.home_hospital_id || null,
+          department_id: editFormData.home_department_id || null,
+          skill_ids: editFormData.selectedSkills,
+          hospital_access_ids: editFormData.hospitalAccess,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setShowEditModal(false);
+        setEditingProvider(null);
+        fetchData();
+      } else {
+        setError(data.error || 'Failed to update provider');
+      }
+    } catch (err) {
+      setError('An error occurred');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Filter edit departments by selected home hospital
+  const filteredEditDepartments = departments.filter(
+    (d) => d.hospital_id === editFormData.home_hospital_id
+  );
+
   async function handleCSVUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -223,6 +324,10 @@ export default function ProvidersPage() {
       let experienceIdx = -1;
       let scheduleDaysIdx = -1;
       let scheduleTimeIdx = -1;
+      // Hospital restriction columns
+      let mshOnlyIdx = -1;
+      let msmwOnlyIdx = -1;
+      let allSitesIdx = -1;
 
       if (isLegacyFormat) {
         // Map legacy columns
@@ -238,7 +343,10 @@ export default function ProvidersPage() {
         supervisingMDIdx = header.findIndex(h => h.includes('supervising') || h.includes('collaborating'));
         certificationIdx = header.findIndex(h => h.includes('certification'));
         experienceIdx = header.findIndex(h => h.includes('experience'));
-        // Note: MSH Only, MSM/W Only, All 3 sites columns are ignored for now
+        // Hospital restriction columns
+        mshOnlyIdx = header.findIndex(h => h.includes('msh only'));
+        msmwOnlyIdx = header.findIndex(h => h.includes('msm') && h.includes('only'));
+        allSitesIdx = header.findIndex(h => h.includes('all') && h.includes('site'));
       } else {
         // New format
         nameIdx = header.indexOf('name');
@@ -355,7 +463,7 @@ export default function ProvidersPage() {
             .filter((id): id is string => !!id);
         }
 
-        // For legacy format, find home hospital
+        // For legacy format, find home hospital and parse hospital restrictions
         let homeHospitalId = '';
         let homeDepartmentId = '';
         if (homeHospitalCode) {
@@ -365,7 +473,37 @@ export default function ProvidersPage() {
           );
           if (homeHospital) {
             homeHospitalId = homeHospital.id;
-            hospitalIds = [homeHospital.id]; // Set hospital access to home hospital
+
+            // Parse hospital restriction columns
+            const mshOnly = mshOnlyIdx !== -1 ? row[mshOnlyIdx]?.trim().toLowerCase() : '';
+            const msmwOnly = msmwOnlyIdx !== -1 ? row[msmwOnlyIdx]?.trim().toLowerCase() : '';
+            const allSites = allSitesIdx !== -1 ? row[allSitesIdx]?.trim().toLowerCase() : '';
+
+            // Determine hospital access based on restriction columns
+            if (allSites === 'yes' || allSites === 'y' || allSites === 'true' || allSites === 'x') {
+              // All 3 sites - give access to all hospitals
+              hospitalIds = hospitals.map(h => h.id);
+            } else if (mshOnly === 'yes' || mshOnly === 'y' || mshOnly === 'true' || mshOnly === 'x') {
+              // MSH Only - find hospital with MSH code
+              const mshHospital = hospitals.find(h => h.short_code.toLowerCase() === 'msh');
+              hospitalIds = mshHospital ? [mshHospital.id] : [homeHospital.id];
+            } else if (msmwOnly === 'yes' || msmwOnly === 'y' || msmwOnly === 'true' || msmwOnly === 'x') {
+              // MSM/W Only - find hospitals with MSM or MSW codes
+              const msmwHospitals = hospitals.filter(h =>
+                h.short_code.toLowerCase() === 'msm' ||
+                h.short_code.toLowerCase() === 'msw' ||
+                h.short_code.toLowerCase().includes('msm')
+              );
+              hospitalIds = msmwHospitals.length > 0 ? msmwHospitals.map(h => h.id) : [homeHospital.id];
+            } else {
+              // Default to home hospital only
+              hospitalIds = [homeHospital.id];
+            }
+
+            // Ensure home hospital is always included in access
+            if (!hospitalIds.includes(homeHospital.id)) {
+              hospitalIds.push(homeHospital.id);
+            }
 
             // Find home department in that hospital
             if (homeDepartmentName) {
@@ -392,10 +530,10 @@ export default function ProvidersPage() {
               email,
               phone: phone || null,
               job_type_id: jobType?.id || jobTypes[0]?.id,
-              skills: skillIds,
-              hospital_access: hospitalIds,
-              home_hospital_id: homeHospitalId || null,
-              home_department_id: homeDepartmentId || null,
+              skill_ids: skillIds,
+              hospital_access_ids: hospitalIds,
+              hospital_id: homeHospitalId || null,
+              department_id: homeDepartmentId || null,
               availability_comments: availabilityComments || null,
             }),
           });
@@ -631,7 +769,10 @@ export default function ProvidersPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button className="text-indigo-600 hover:text-indigo-900">
+                        <button
+                          onClick={() => openEditModal(provider)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
                           Edit
                         </button>
                       </td>
@@ -866,7 +1007,7 @@ export default function ProvidersPage() {
                     <li>• <strong>Home Site</strong>: Hospital short code (MSH, etc.)</li>
                     <li>• <strong>Home Department</strong>: Department name</li>
                     <li>• <strong>Certification</strong>: Maps to skills dropdown</li>
-                    <li>• Hospital restriction columns (MSH Only, etc.) are ignored</li>
+                    <li>• <strong>MSH Only / MSM/W Only / All 3 sites</strong>: Set hospital access (YES/Y/X)</li>
                   </ul>
                 </div>
 
@@ -945,6 +1086,213 @@ export default function ProvidersPage() {
                 Close
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Provider Modal */}
+      {showEditModal && editingProvider && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Edit Provider</h2>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="p-6 space-y-6">
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                {/* Basic Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      required
+                      placeholder="e.g., Dr. John Smith, RN"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                      required
+                      placeholder="provider@email.com"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                      placeholder="555-123-4567"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Provider Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Provider Type *
+                  </label>
+                  <select
+                    value={editFormData.job_type_id}
+                    onChange={(e) => setEditFormData({ ...editFormData, job_type_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">Select type...</option>
+                    {jobTypes.map((jt) => (
+                      <option key={jt.id} value={jt.id}>
+                        {jt.name} ({jt.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Home Location */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Home Hospital
+                    </label>
+                    <select
+                      value={editFormData.home_hospital_id}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          home_hospital_id: e.target.value,
+                          home_department_id: '',
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="">No home hospital</option>
+                      {hospitals.map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {h.name} ({h.short_code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Home Department
+                    </label>
+                    <select
+                      value={editFormData.home_department_id}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, home_department_id: e.target.value })
+                      }
+                      disabled={!editFormData.home_hospital_id}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
+                    >
+                      <option value="">No home department</option>
+                      {filteredEditDepartments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Skills */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Skills & Certifications
+                  </label>
+                  <div className="space-y-3 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {Object.entries(skillsByCategory).map(([category, categorySkills]) => (
+                      <div key={category}>
+                        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+                          {category}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {categorySkills.map((skill) => {
+                            const isSelected = editFormData.selectedSkills.includes(skill.id);
+                            return (
+                              <button
+                                key={skill.id}
+                                type="button"
+                                onClick={() => toggleEditSkill(skill.id)}
+                                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                  isSelected
+                                    ? 'bg-green-100 text-green-800 border border-green-300'
+                                    : 'bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-300'
+                                }`}
+                              >
+                                {skill.name} {isSelected && '✓'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Hospital Access */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Hospital Access (can work at)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {hospitals.map((hospital) => {
+                      const isSelected = editFormData.hospitalAccess.includes(hospital.id);
+                      return (
+                        <button
+                          key={hospital.id}
+                          type="button"
+                          onClick={() => toggleEditHospitalAccess(hospital.id)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-indigo-300'
+                          }`}
+                        >
+                          {hospital.short_code} - {hospital.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingProvider(null);
+                    setError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

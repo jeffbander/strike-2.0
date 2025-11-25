@@ -95,10 +95,12 @@ async function createHandler(request: NextRequest) {
     const validation = validateRequest(createProviderSchema, body);
     if (!validation.success) return validation.response;
 
-    // Check department access
-    const hasAccess = await checkDepartmentAccess(userId, validation.data.department_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied to department' }, { status: 403 });
+    // Check department access only if department_id is provided
+    if (validation.data.department_id) {
+      const hasAccess = await checkDepartmentAccess(userId, validation.data.department_id);
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Access denied to department' }, { status: 403 });
+      }
     }
 
     // Get departmental admin ID for created_by
@@ -112,13 +114,13 @@ async function createHandler(request: NextRequest) {
     const { data: provider, error: providerError } = await supabaseAdmin
       .from('providers')
       .insert({
-        department_id: validation.data.department_id,
-        hospital_id: validation.data.hospital_id,
+        department_id: validation.data.department_id || null,
+        hospital_id: validation.data.hospital_id || null,
         name: validation.data.name,
         email: validation.data.email,
         phone: validation.data.phone,
         job_type_id: validation.data.job_type_id,
-        availability_comments: validation.data.availability_comments,
+        availability_comments: validation.data.availability_comments || null,
         created_by: adminData?.id || userId,
         is_active: true,
       })
@@ -127,9 +129,10 @@ async function createHandler(request: NextRequest) {
 
     if (providerError) throw providerError;
 
-    // Create provider skills
-    if (validation.data.skill_ids.length > 0) {
-      const skillInserts = validation.data.skill_ids.map((skillId) => ({
+    // Create provider skills (if any)
+    const skillIds = validation.data.skill_ids || [];
+    if (skillIds.length > 0) {
+      const skillInserts = skillIds.map((skillId) => ({
         provider_id: provider.id,
         skill_id: skillId,
       }));
@@ -141,21 +144,26 @@ async function createHandler(request: NextRequest) {
       if (skillError) throw skillError;
     }
 
-    // Create hospital access - always include home hospital
-    const hospitalAccessIds = new Set(validation.data.hospital_access_ids);
-    hospitalAccessIds.add(validation.data.hospital_id); // Ensure home hospital is included
+    // Create hospital access
+    const hospitalAccessIds = new Set(validation.data.hospital_access_ids || []);
+    // Include home hospital if provided
+    if (validation.data.hospital_id) {
+      hospitalAccessIds.add(validation.data.hospital_id);
+    }
 
-    const accessInserts = Array.from(hospitalAccessIds).map((hospitalId) => ({
-      provider_id: provider.id,
-      hospital_id: hospitalId,
-      can_work_here: true,
-    }));
+    if (hospitalAccessIds.size > 0) {
+      const accessInserts = Array.from(hospitalAccessIds).map((hospitalId) => ({
+        provider_id: provider.id,
+        hospital_id: hospitalId,
+        can_work_here: true,
+      }));
 
-    const { error: accessError } = await supabaseAdmin
-      .from('provider_hospital_access')
-      .insert(accessInserts);
+      const { error: accessError } = await supabaseAdmin
+        .from('provider_hospital_access')
+        .insert(accessInserts);
 
-    if (accessError) throw accessError;
+      if (accessError) throw accessError;
+    }
 
     await logAudit({
       action: 'CREATE',
@@ -164,7 +172,7 @@ async function createHandler(request: NextRequest) {
       changes: {
         name: provider.name,
         email: provider.email,
-        skills: validation.data.skill_ids.length,
+        skills: skillIds.length,
         hospitals: hospitalAccessIds.size,
       },
     });

@@ -261,17 +261,18 @@ export const createJobTypeSchema = z.object({
 
 /**
  * Provider creation schema
+ * Note: department_id and skill_ids are optional for CSV bulk uploads
  */
 export const createProviderSchema = z.object({
-  department_id: uuidSchema,
-  hospital_id: uuidSchema,
+  department_id: uuidSchema.nullable().optional(),
+  hospital_id: uuidSchema.nullable().optional(),
   name: providerNameSchema,
   email: emailSchema,
   phone: phoneSchema,
   job_type_id: uuidSchema,
-  skill_ids: z.array(uuidSchema).min(1, 'At least one skill required'),
-  hospital_access_ids: z.array(uuidSchema).min(1, 'At least one hospital access required'),
-  availability_comments: safeTextSchema.optional(),
+  skill_ids: z.array(uuidSchema).default([]),
+  hospital_access_ids: z.array(uuidSchema).default([]),
+  availability_comments: safeTextSchema.nullable().optional(),
 });
 
 /**

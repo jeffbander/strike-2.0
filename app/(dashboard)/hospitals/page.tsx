@@ -23,12 +23,20 @@ export default function HospitalsPage() {
   const [healthSystems, setHealthSystems] = useState<HealthSystem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingHospital, setEditingHospital] = useState<Hospital | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     short_code: '',
     city: '',
     state: '',
     health_system_id: '',
+  });
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    short_code: '',
+    city: '',
+    state: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -91,6 +99,55 @@ export default function HospitalsPage() {
         fetchHospitals();
       } else {
         setError(data.error || 'Failed to create hospital');
+      }
+    } catch (error) {
+      setError('An error occurred');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function openEditModal(hospital: Hospital) {
+    setEditingHospital(hospital);
+    setEditFormData({
+      name: hospital.name,
+      short_code: hospital.short_code,
+      city: hospital.city || '',
+      state: hospital.state || '',
+    });
+    setError('');
+    setShowEditModal(true);
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingHospital) return;
+
+    setSubmitting(true);
+    setError('');
+
+    try {
+      // Get CSRF token
+      const csrfRes = await fetch('/api/csrf');
+      const { csrfToken } = await csrfRes.json();
+
+      const res = await fetch(`/api/hospitals/${editingHospital.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify(editFormData),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setShowEditModal(false);
+        setEditingHospital(null);
+        fetchHospitals();
+      } else {
+        setError(data.error || 'Failed to update hospital');
       }
     } catch (error) {
       setError('An error occurred');
@@ -174,7 +231,10 @@ export default function HospitalsPage() {
                     {hospital.health_systems?.name || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-indigo-600 hover:text-indigo-900">
+                    <button
+                      onClick={() => openEditModal(hospital)}
+                      className="text-indigo-600 hover:text-indigo-900"
+                    >
                       Edit
                     </button>
                   </td>
@@ -302,6 +362,120 @@ export default function HospitalsPage() {
                 </Button>
                 <Button type="submit" loading={submitting}>
                   Add Hospital
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Hospital Modal */}
+      {showEditModal && editingHospital && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Edit Hospital</h2>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="p-6 space-y-4">
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Health System
+                  </label>
+                  <div className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600">
+                    {editingHospital.health_systems?.name || 'Unknown'}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Health system cannot be changed
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Hospital Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.name}
+                    onChange={(e) =>
+                      setEditFormData({ ...editFormData, name: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="e.g., Mount Sinai Hospital"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Short Code *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.short_code}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        short_code: e.target.value.toUpperCase(),
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="e.g., MSH"
+                    maxLength={10}
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Used in job codes (e.g., MSH for Mount Sinai Hospital)
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.city}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, city: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="New York"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.state}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, state: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="NY"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingHospital(null);
+                    setError('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" loading={submitting}>
+                  Save Changes
                 </Button>
               </div>
             </form>
