@@ -12,6 +12,7 @@ import {
   Stethoscope,
   Users,
   GitMerge,
+  ClipboardList,
   Settings,
   LogOut,
   Menu,
@@ -34,6 +35,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Assignment Board', href: '/assignment-board', icon: ClipboardList },
   { name: 'Health Systems', href: '/health-systems', icon: Building2, roles: ['super_admin'] },
   { name: 'Hospitals', href: '/hospitals', icon: Building, roles: ['super_admin', 'health_system_admin'] },
   { name: 'Departments', href: '/departments', icon: Layers },
